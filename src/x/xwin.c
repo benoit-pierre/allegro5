@@ -162,7 +162,6 @@ static int use_bgr_palette_hack = FALSE; /* use BGR hack for color conversion pa
 int _xwin_missed_input;
 #endif
 
-#define X_MAX_EVENTS   5
 #define MOUSE_WARP_DELAY   200
 
 static char _xwin_driver_desc[256] = EMPTY_STRING;
@@ -2448,7 +2447,7 @@ static void _xwin_private_process_event(XEvent *event)
 void _xwin_private_handle_input(void)
 {
    int i, events, events_queued;
-   static XEvent event[X_MAX_EVENTS + 1]; /* +1 for possible extra event, see below. */
+   XEvent event, next_event;
 
    if (_xwin.display == 0)
       return;
@@ -2471,38 +2470,25 @@ void _xwin_private_handle_input(void)
    if (events <= 0)
       return;
 
-   /* Limit amount of events we read at once.  */
-   if (events > X_MAX_EVENTS)
-      events = X_MAX_EVENTS;
-
-   /* Read pending events.  */
-   for (i = 0; i < events; i++)
-      XNextEvent(_xwin.display, &event[i]);
-
-   /* Can't have a KeyRelease as last event, since it might be only half
-    * of a key repeat pair. Also see comment below.
-    */
-   if (events_queued > events && event[i - 1].type == KeyRelease) {
-      XNextEvent(_xwin.display, &event[i]);
-      events++;
-   }
-
    /* Process all events.  */
    for (i = 0; i < events; i++) {
+
+      XNextEvent(_xwin.display, &event);
 
       /* Hack to make Allegro's key[] array work despite of key repeat.
        * If a KeyRelease is sent at the same time as a KeyPress following
        * it with the same keycode, we ignore the release event.
        */
-      if (event[i].type == KeyRelease && (i + 1) < events) {
-	 if (event[i + 1].type == KeyPress) {
-	    if (event[i].xkey.keycode == event[i + 1].xkey.keycode &&
-	       event[i].xkey.time == event[i + 1].xkey.time)
+      if (event.type == KeyRelease && (i + 1) < events) {
+         XPeekEvent(_xwin.display, &next_event);
+	 if (next_event.type == KeyPress) {
+	    if (event.xkey.keycode == next_event.xkey.keycode &&
+	       event.xkey.time == next_event.xkey.time)
 	       continue;
 	 }
       }
 
-      _xwin_private_process_event(&event[i]);
+      _xwin_private_process_event(&event);
    }
 }
 
